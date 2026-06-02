@@ -31,9 +31,44 @@ export interface ChatRequest {
 }
 
 export interface ChatResponse {
-  answer?: string;
+  answer?: string | null;
   conversation_id?: string;
   handoff?: boolean;
+  handoff_active?: boolean;
+}
+
+export interface PolledMessage {
+  id: string;
+  role: "assistant" | "user";
+  content: string;
+  created_at: string;
+}
+
+export interface PollResponse {
+  conversation_id: string;
+  status: string;
+  last_message_at: string;
+  messages: PolledMessage[];
+}
+
+export async function pollMessages(
+  apiBase: string,
+  apiKey: string,
+  conversationId: string,
+  since: string | null
+): Promise<PollResponse | null> {
+  try {
+    const url = new URL(`${apiBase}/widget/messages`);
+    url.searchParams.set("conversationId", conversationId);
+    if (since) url.searchParams.set("since", since);
+    const r = await fetch(url.toString(), {
+      headers: { "x-api-key": apiKey }
+    });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch {
+    return null;
+  }
 }
 
 export async function sendChat(

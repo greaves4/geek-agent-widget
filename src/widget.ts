@@ -12,12 +12,14 @@
  */
 
 import { ensureStyles } from "./styles";
-import { fetchTheme, sendChat } from "./api";
+import { fetchTheme, sendChat, pollMessages } from "./api";
 import { createLauncher } from "./launcher";
 import { createPanel, type Message } from "./panel";
 import { fmtTime } from "./helpers";
 import { t, type Lang } from "./strings";
 import type { SurfaceTheme } from "./theme";
+
+const POLL_INTERVAL_MS = 6000;
 
 export interface InitOptions {
   apiBase?: string;
@@ -157,8 +159,10 @@ export async function init(opts: InitOptions) {
   // ─── Build panel (solo al abrir) ──────────────────────────
   let panelWrap: HTMLDivElement | null = null;
   let panelHandle: ReturnType<typeof createPanel> | null = null;
-  let typingActive = false;
   let sending = false;
+  let pollTimer: number | null = null;
+  let handoffActive = false;
+  let lastPollSeen: string | null = null; // ISO timestamp del último mensaje visto vía poll
 
   function isMobile(): boolean {
     return window.matchMedia("(max-width: 767px)").matches;
@@ -216,7 +220,75 @@ export async function init(opts: InitOptions) {
     mount.classList.remove("ga-has-panel");
     document.body.style.removeProperty("overflow");
     saveState(key, state);
+    // El polling sigue corriendo aunque cierres el panel — los mensajes nuevos
+    // se acumulan en state.messages y bumpean el badge del launcher.
   }
+
+  // ─── Polling de mensajes del asesor humano ─────────────────
+  async function pollOnce() {
+    if (!state.conversationId) return;
+    const result = await pollMessages(apiBase, opts.apiKey, state.conversationId, lastPollSeen);
+    if (!result) return;
+
+    // Detectar nuevo handoff
+    const nowHandoff = result.status === "pending" || result.status === "in_review";
+    if (nowHandoff !== handoffActive) {
+      handoffActive = nowHandoff;
+      if (panelHandle) panelHandle.setHandoff(handoffActive);
+    }
+
+    if (!result.messages || result.messages.length === 0) {
+      // Aún así, si nunca hicimos un pull con `since`, marca el último mensaje conocido como visto
+      if (!lastPollSeen && result.last_message_at) lastPollSeen = result.last_message_at;
+      return;
+    }
+
+    // Mensajes nuevos del lado servidor — solo asistente. Filtramos los que ya tengamos por id.
+    const knownIds = new Set(state.messages.map(m => String(m.id)));
+    let appended = 0;
+    for (const m of result.messages) {
+      if (knownIds.has(String(m.id))) continue;
+      const newMsg: Message = {
+        id: m.id,
+        from: "bot",
+        text: m.content,
+        time: new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      };
+      state.messages.push(newMsg);
+      if (panelHandle) {
+        panelHandle.appendMessage(newMsg);
+        panelHandle.pulseDot();
+      }
+      lastPollSeen = m.created_at;
+      appended++;
+    }
+
+    if (appended > 0) {
+      if (!state.open) {
+        // El usuario no tiene el chat abierto → notificación
+        state.badge += appended;
+        launcher.setBadge(state.badge);
+      }
+      saveState(key, state);
+    }
+  }
+
+  function startPolling() {
+    if (pollTimer != null || !state.conversationId) return;
+    // Disparo uno inmediato y luego cada N segundos
+    pollOnce();
+    pollTimer = window.setInterval(pollOnce, POLL_INTERVAL_MS);
+  }
+
+  function stopPolling() {
+    if (pollTimer != null) {
+      window.clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  }
+
+  // Si hay conversación previa, arranca polling inmediatamente
+  if (state.conversationId) startPolling();
 
   function toggle() {
     if (state.open) {
@@ -264,18 +336,36 @@ export async function init(opts: InitOptions) {
     panelHandle?.setTyping(false);
 
     if (res.ok) {
-      if (res.data.conversation_id) state.conversationId = res.data.conversation_id;
-      const botMsg: Message = {
-        id: "b-" + Date.now(),
-        from: "bot",
-        text: res.data.answer || "…",
-        time: fmtTime(0)
-      };
-      state.messages.push(botMsg);
-      panelHandle?.appendMessage(botMsg);
-      panelHandle?.pulseDot();
-      if (res.data.handoff) {
-        // No persistimos la conversación adelante — un asesor humano sigue la conversación en el dashboard
+      if (res.data.conversation_id) {
+        const wasNew = !state.conversationId;
+        state.conversationId = res.data.conversation_id;
+        if (wasNew) startPolling(); // primera conversación → arranca polling para handoff futuro
+      }
+
+      // Si la conversación entró en handoff (asesor humano), no hay answer.
+      if (res.data.handoff_active) {
+        if (!handoffActive) {
+          handoffActive = true;
+          panelHandle?.setHandoff(true);
+        }
+        // No appendeamos nada — el banner de handoff ya está visible y el polling
+        // traerá la respuesta del asesor cuando llegue.
+      } else if (res.data.answer) {
+        const botMsg: Message = {
+          id: "b-" + Date.now(),
+          from: "bot",
+          text: res.data.answer,
+          time: fmtTime(0)
+        };
+        state.messages.push(botMsg);
+        panelHandle?.appendMessage(botMsg);
+        panelHandle?.pulseDot();
+      }
+
+      if (res.data.handoff && !handoffActive) {
+        // El bot acaba de transferir (primera vez): se muestra el banner
+        handoffActive = true;
+        panelHandle?.setHandoff(true);
       }
     } else {
       const errMsg: Message = {

@@ -35,6 +35,7 @@ export interface PanelHandle {
   setMessages(list: Message[]): void;
   pulseDot(): void;
   focusInput(): void;
+  setHandoff(active: boolean): void;
 }
 
 export function createPanel(opts: PanelOpts): PanelHandle {
@@ -386,8 +387,24 @@ export function createPanel(opts: PanelOpts): PanelHandle {
   composer.appendChild(form);
   composer.appendChild(powered);
 
+  // Banner de handoff — oculto por default
+  const handoffBanner = el("div", {
+    style: {
+      display: "none",
+      padding: "8px 14px",
+      background: "#FEF3C7",
+      borderTop: `1px solid ${S.line}`,
+      color: "#92400E",
+      fontSize: "12.5px",
+      lineHeight: "1.4",
+      textAlign: "center"
+    }
+  });
+  handoffBanner.innerHTML = `<strong>🙋 Un asesor te está atendiendo</strong><br>Tu mensaje irá directo al equipo.`;
+
   root.appendChild(header);
   root.appendChild(scroller);
+  root.appendChild(handoffBanner);
   root.appendChild(composer);
 
   return {
@@ -401,6 +418,19 @@ export function createPanel(opts: PanelOpts): PanelHandle {
       scroller.innerHTML = "";
       for (const m of list) scroller.appendChild(renderMessage(m, false));
       scrollBottom();
+    },
+    setHandoff(active: boolean) {
+      handoffBanner.style.display = active ? "block" : "none";
+      // Quita typing (no aplica en handoff)
+      if (active) showTyping(false);
+      // Cambia el placeholder del input
+      input.placeholder = active
+        ? (opts.lang === "en" ? "Message the agent…" : "Escribe al asesor…")
+        : t(opts.lang, "placeholder");
+      // Cambia el texto de status del header
+      statusText.textContent = active
+        ? (opts.lang === "en" ? "Agent is helping you" : "Asesor atendiéndote")
+        : t(opts.lang, "online");
     },
     pulseDot() {
       nameDot.className = "";
