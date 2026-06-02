@@ -1,7 +1,8 @@
-import { el, readableOn, initials, fmtTime } from "./helpers";
+import { el, readableOn, initials } from "./helpers";
 import { iconClose, iconMinimize, iconSend, isotipoSvg } from "./isotipo";
 import { surface, type SurfaceTheme } from "./theme";
 import { t, type Lang } from "./strings";
+import { renderMarkdown } from "./markdown";
 
 export interface Message {
   id: string | number;
@@ -181,20 +182,32 @@ export function createPanel(opts: PanelOpts): PanelHandle {
       }
     });
 
+    const bubbleColor = m.error ? "#991B1B" : (isUser ? userFg : S.botText);
+    // Para mensajes del usuario, color de link = userFg con opacidad ligera.
+    // Para mensajes del bot (y errores), color de link = color primario del cliente.
+    const linkColor = isUser ? userFg : opts.primary;
+
     const bubble = el("div", {
-      text: m.text,
       style: {
         padding: "9px 13px", fontSize: "14.5px", lineHeight: "1.45",
         borderRadius: "16px",
         borderBottomRightRadius: isUser ? "5px" : "16px",
         borderBottomLeftRadius: isUser ? "16px" : "5px",
         background: m.error ? "#FEE2E2" : (isUser ? opts.primary : S.botBubble),
-        color: m.error ? "#991B1B" : (isUser ? userFg : S.botText),
+        color: bubbleColor,
         border: m.error ? "1px solid #FECACA" : (isUser ? "none" : `1px solid ${S.line}`),
-        wordBreak: "break-word",
-        whiteSpace: "pre-wrap"
+        wordBreak: "break-word"
       }
     });
+
+    if (isUser) {
+      // Usuario: texto plano (sin parsear markdown, para evitar inyecciones inesperadas)
+      bubble.textContent = m.text;
+      bubble.style.whiteSpace = "pre-wrap";
+    } else {
+      // Bot: renderiza markdown (links, bold, italic, code, listas, autolink URLs)
+      bubble.innerHTML = renderMarkdown(m.text, linkColor);
+    }
 
     const time = el("span", {
       text: m.time,
