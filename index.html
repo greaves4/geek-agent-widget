@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Geek Agent Widget — Dev Demo</title>
+  <style>
+    body { margin: 0; min-height: 100vh; font-family: system-ui, sans-serif;
+      background: linear-gradient(135deg, #0f172a, #1e293b); color: #fff;
+      display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .card { max-width: 640px; padding: 32px; background: rgba(255,255,255,.05);
+      border-radius: 20px; border: 1px solid rgba(255,255,255,.1); backdrop-filter: blur(20px); }
+    h1 { margin: 0 0 8px; font-size: 24px; }
+    p { color: rgba(255,255,255,.7); line-height: 1.6; margin: 0 0 16px; }
+    code { background: rgba(255,255,255,.1); padding: 2px 8px; border-radius: 4px; font-family: ui-monospace, monospace; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Geek Agent Widget · Dev demo</h1>
+    <p>El widget debe aparecer en la esquina inferior derecha. Para probarlo apuntando a tu API local, ajusta <code>apiBase</code>, <code>botId</code> y <code>apiKey</code> abajo.</p>
+    <p>Build de producción: <code>npm run build</code> genera <code>dist/widget.umd.js</code>.</p>
+  </div>
+
+  <script type="module">
+    import * as GeekAgentWidget from "./src/widget.ts";
+    window.GeekAgentWidget = GeekAgentWidget;
+    GeekAgentWidget.init({
+      apiBase: "http://localhost:4000",
+      botId: "45518470-cb52-4a3e-bd68-580ca763aecf",
+      apiKey: "ga_DEV_KEY_REPLACE_ME"
+    });
+  </script>
+</body>
+</html>
