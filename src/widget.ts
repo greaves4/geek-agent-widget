@@ -122,10 +122,14 @@ export async function init(opts: InitOptions) {
   ensureStyles();
   mounted = true;
 
-  // Mount container
+  // Mount container.
+  // IMPORTANTE: appendeamos a <html> (documentElement), NO a <body>.
+  // Lenis y Framer Motion frecuentemente aplican `transform` al <body>, lo cual
+  // hace que `position: fixed` se vuelva relativo al body en vez del viewport.
+  // Appendeando a <html> evitamos cualquier transform en la cadena de ancestors.
   const mount = document.createElement("div");
   mount.className = "ga-mount" + (position === "left" ? " ga-left" : "");
-  document.body.appendChild(mount);
+  (document.documentElement || document.body).appendChild(mount);
 
   // ─── State persistente ────────────────────────────────────
   const key = storageKey(opts.botId, opts.apiKey);
@@ -191,13 +195,13 @@ export async function init(opts: InitOptions) {
     panelWrap.appendChild(panelHandle.root);
 
     if (fullscreen) {
-      // En mobile, el panel va directo al body con position fixed.
+      // En mobile, el panel va directo al <html> con position fixed.
       // El launcher se oculta vía CSS (.ga-has-panel).
       panelWrap.style.cssText =
         "position:fixed;top:0;left:0;right:0;bottom:0;" +
         "width:100vw;width:100dvw;height:100vh;height:100dvh;" +
         "z-index:2147483647;animation:ga-panel-in 260ms cubic-bezier(.22,1,.36,1) both;";
-      document.body.appendChild(panelWrap);
+      (document.documentElement || document.body).appendChild(panelWrap);
       mount.classList.add("ga-has-panel");
       // Bloqueamos el scroll del body para que solo scroll dentro del panel
       document.body.style.setProperty("overflow", "hidden", "important");
@@ -230,20 +234,28 @@ export async function init(opts: InitOptions) {
     const result = await pollMessages(apiBase, opts.apiKey, state.conversationId, lastPollSeen);
     if (!result) return;
 
-    // Detectar nuevo handoff
+    // Detectar cambio de handoff
     const nowHandoff = result.status === "pending" || result.status === "in_review";
     if (nowHandoff !== handoffActive) {
       handoffActive = nowHandoff;
       if (panelHandle) panelHandle.setHandoff(handoffActive);
     }
 
-    if (!result.messages || result.messages.length === 0) {
-      // Aún así, si nunca hicimos un pull con `since`, marca el último mensaje conocido como visto
-      if (!lastPollSeen && result.last_message_at) lastPollSeen = result.last_message_at;
+    // Si es el primer poll (sin `since`), solo establecemos el cursor para futuros polls.
+    // No appendeamos mensajes (los que ya tenemos están guardados localmente).
+    if (!lastPollSeen) {
+      if (result.last_message_at) lastPollSeen = result.last_message_at;
+      else if (result.messages.length > 0) {
+        lastPollSeen = result.messages[result.messages.length - 1].created_at;
+      } else {
+        lastPollSeen = new Date().toISOString();
+      }
       return;
     }
 
-    // Mensajes nuevos del lado servidor — solo asistente. Filtramos los que ya tengamos por id.
+    if (!result.messages || result.messages.length === 0) return;
+
+    // Mensajes nuevos del servidor. Dedup por id por si acaso.
     const knownIds = new Set(state.messages.map(m => String(m.id)));
     let appended = 0;
     for (const m of result.messages) {
@@ -265,7 +277,6 @@ export async function init(opts: InitOptions) {
 
     if (appended > 0) {
       if (!state.open) {
-        // El usuario no tiene el chat abierto → notificación
         state.badge += appended;
         launcher.setBadge(state.badge);
       }
@@ -275,19 +286,15 @@ export async function init(opts: InitOptions) {
 
   function startPolling() {
     if (pollTimer != null || !state.conversationId) return;
-    // Disparo uno inmediato y luego cada N segundos
-    pollOnce();
+    // No disparo poll inmediato — el primer poll establecerá el cursor sin appendear.
+    // Espera N segundos para que el primer poll real busque mensajes posteriores
+    // al bot reply que acabamos de mostrar.
     pollTimer = window.setInterval(pollOnce, POLL_INTERVAL_MS);
+    // Cursor inicial: ahora. Así el primer poll busca mensajes nuevos > ahora.
+    lastPollSeen = new Date().toISOString();
   }
 
-  function stopPolling() {
-    if (pollTimer != null) {
-      window.clearInterval(pollTimer);
-      pollTimer = null;
-    }
-  }
-
-  // Si hay conversación previa, arranca polling inmediatamente
+  // Si hay conversación previa, arranca polling (cursor desde ahora)
   if (state.conversationId) startPolling();
 
   function toggle() {
