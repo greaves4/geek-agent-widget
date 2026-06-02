@@ -219,8 +219,14 @@ export function createPanel(opts: PanelOpts): PanelHandle {
       bubble.textContent = m.text;
       bubble.style.whiteSpace = "pre-wrap";
     } else {
-      // Bot: renderiza markdown (links, bold, italic, code, listas, autolink URLs)
-      bubble.innerHTML = renderMarkdown(m.text, linkColor);
+      // Bot: renderiza markdown. Si por alguna razón falla, fallback a texto plano.
+      try {
+        bubble.innerHTML = renderMarkdown(m.text, linkColor);
+      } catch (e) {
+        if (typeof console !== "undefined") console.warn("[GeekAgentWidget] message render failed, falling back to plain:", e);
+        bubble.textContent = m.text;
+        bubble.style.whiteSpace = "pre-wrap";
+      }
     }
 
     const time = el("span", {

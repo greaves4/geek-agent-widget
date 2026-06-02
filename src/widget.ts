@@ -342,6 +342,12 @@ export async function init(opts: InitOptions) {
     typingActive = false;
     panelHandle?.setTyping(false);
 
+    // Debug temporal — para diagnosticar por qué no se renderiza la respuesta
+    if (typeof console !== "undefined") {
+      console.log("[GeekAgentWidget] response:", res.ok ? "ok" : "error",
+        res.ok ? { hasAnswer: !!res.data.answer, answerLen: (res.data.answer || "").length, handoff: res.data.handoff, handoff_active: res.data.handoff_active, panelOpen: !!panelHandle } : res.error);
+    }
+
     if (res.ok) {
       if (res.data.conversation_id) {
         const wasNew = !state.conversationId;
@@ -365,8 +371,12 @@ export async function init(opts: InitOptions) {
           time: fmtTime(0)
         };
         state.messages.push(botMsg);
-        panelHandle?.appendMessage(botMsg);
-        panelHandle?.pulseDot();
+        try {
+          panelHandle?.appendMessage(botMsg);
+          panelHandle?.pulseDot();
+        } catch (e) {
+          if (typeof console !== "undefined") console.error("[GeekAgentWidget] appendMessage failed:", e);
+        }
       }
 
       if (res.data.handoff && !handoffActive) {
@@ -383,7 +393,11 @@ export async function init(opts: InitOptions) {
         error: true
       };
       state.messages.push(errMsg);
-      panelHandle?.appendMessage(errMsg);
+      try {
+        panelHandle?.appendMessage(errMsg);
+      } catch (e) {
+        if (typeof console !== "undefined") console.error("[GeekAgentWidget] appendMessage (error) failed:", e);
+      }
     }
 
     saveState(key, state);

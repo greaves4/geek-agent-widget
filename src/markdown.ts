@@ -30,33 +30,39 @@ function safeUrl(u: string): string {
 export function renderMarkdown(input: string, linkColor: string): string {
   if (!input) return "";
 
-  let s = escapeHtml(input);
+  try {
+    let s = escapeHtml(input);
 
-  // [text](url) — antes que autolink para no doblar
-  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, text: string, url: string) =>
-    `<a href="${safeUrl(url)}" target="_blank" rel="noopener" style="color:${linkColor};text-decoration:underline;">${text}</a>`
-  );
+    // [text](url) — antes que autolink para no doblar
+    s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, text: string, url: string) =>
+      `<a href="${safeUrl(url)}" target="_blank" rel="noopener" style="color:${linkColor};text-decoration:underline;">${text}</a>`
+    );
 
-  // Autolink URLs sueltas (que no estén ya dentro de un href)
-  s = s.replace(/(^|[\s(])(https?:\/\/[^\s<)]+[^\s.,;:!?<)])/g, (_m, pre: string, url: string) =>
-    `${pre}<a href="${safeUrl(url)}" target="_blank" rel="noopener" style="color:${linkColor};text-decoration:underline;">${url}</a>`
-  );
+    // Autolink URLs sueltas (que no estén ya dentro de un href)
+    s = s.replace(/(^|[\s(])(https?:\/\/[^\s<)]+[^\s.,;:!?<)])/g, (_m, pre: string, url: string) =>
+      `${pre}<a href="${safeUrl(url)}" target="_blank" rel="noopener" style="color:${linkColor};text-decoration:underline;">${url}</a>`
+    );
 
-  // **bold**
-  s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    // **bold**
+    s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
 
-  // *italic* o _italic_  (cuidado: no romper underscores en URLs)
-  s = s.replace(/(?<![a-zA-Z0-9])_([^_\n]+)_(?![a-zA-Z0-9])/g, "<em>$1</em>");
-  s = s.replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, "<em>$1</em>");
+    // *italic* simple — sin lookbehind (compat universal)
+    s = s.replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
 
-  // `code`
-  s = s.replace(/`([^`\n]+)`/g, "<code style=\"background:rgba(0,0,0,.08);padding:1px 5px;border-radius:3px;font-size:.92em;font-family:ui-monospace,monospace;\">$1</code>");
+    // `code`
+    s = s.replace(/`([^`\n]+)`/g, "<code style=\"background:rgba(0,0,0,.08);padding:1px 5px;border-radius:3px;font-size:.92em;font-family:ui-monospace,monospace;\">$1</code>");
 
-  // Listas simples: "- " al inicio de línea
-  s = s.replace(/(^|\n)([-*])\s+(.+)/g, (_m, pre: string, _b: string, item: string) => `${pre}• ${item}`);
+    // Listas simples: "- " al inicio de línea
+    s = s.replace(/(^|\n)([-*])\s+(.+)/g, (_m, pre: string, _b: string, item: string) => `${pre}• ${item}`);
 
-  // Saltos de línea
-  s = s.replace(/\n/g, "<br>");
+    // Saltos de línea
+    s = s.replace(/\n/g, "<br>");
 
-  return s;
+    return s;
+  } catch (e) {
+    // Si algo en la regex tira (poco probable pero defensivo),
+    // devolvemos el texto original escapado para que al menos se vea.
+    if (typeof console !== "undefined") console.warn("[GeekAgentWidget] markdown render failed:", e);
+    return escapeHtml(input).replace(/\n/g, "<br>");
+  }
 }
