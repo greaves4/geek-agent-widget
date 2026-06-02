@@ -284,12 +284,21 @@ export function createPanel(opts: PanelOpts): PanelHandle {
       padding: opts.fullscreen
         ? "12px 14px calc(12px + env(safe-area-inset-bottom))"
         : "12px 14px 10px",
-      flexShrink: "0"
+      flexShrink: "0",
+      width: "100%",
+      maxWidth: "100%",
+      overflow: "hidden"
     }
   });
 
   const form = el("form", {
-    style: { display: "flex", alignItems: "center", gap: "8px" }
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: "8px",
+      width: "100%",
+      maxWidth: "100%"
+    }
   });
 
   const input = el("input", {
@@ -300,13 +309,15 @@ export function createPanel(opts: PanelOpts): PanelHandle {
       "aria-label": t(opts.lang, "placeholder")
     },
     style: {
-      flex: "1",
+      flex: "1 1 auto",
+      minWidth: "0", // permite shrink debajo del intrinsic size
+      width: "100%",
       border: `1px solid ${S.line}`,
       background: S.inputBg,
       color: S.inputText, // ← fix: NUNCA blanco
       borderRadius: "999px",
       padding: "11px 16px",
-      fontSize: "14.5px",
+      fontSize: "16px", // ≥16px en mobile evita el zoom automático de iOS al hacer focus
       outline: "none",
       fontFamily: opts.fontFamily,
       transition: "border-color 150ms ease, box-shadow 150ms ease"
@@ -323,11 +334,20 @@ export function createPanel(opts: PanelOpts): PanelHandle {
       disabled: "true"
     },
     style: {
-      width: "42px", height: "42px", flexShrink: "0", borderRadius: "999px",
-      border: "none", background: opts.primary, color: fg,
+      width: "42px",
+      minWidth: "42px",
+      height: "42px",
+      flexShrink: "0",
+      flexGrow: "0",
+      borderRadius: "999px",
+      border: "none",
+      background: opts.primary,
+      color: fg,
       cursor: "default",
-      display: "grid", placeItems: "center",
+      display: "grid",
+      placeItems: "center",
       opacity: "0.45",
+      padding: "0",
       transition: "opacity 150ms ease, transform 150ms ease"
     }
   }) as HTMLButtonElement;

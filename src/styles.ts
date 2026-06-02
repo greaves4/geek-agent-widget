@@ -29,6 +29,12 @@ export const CSS = `
   pointer-events: none;
 }
 .ga-mount > * { pointer-events: auto; }
+
+/* CRÍTICO: box-sizing border-box en TODO lo que renderea el widget.
+   Sin esto, inputs con flex:1 + padding overflowean en mobile. */
+.ga-mount *, .ga-mount *::before, .ga-mount *::after,
+.ga-panel-wrap *, .ga-panel-wrap *::before, .ga-panel-wrap *::after,
+.ga-panel-fs *, .ga-panel-fs *::before, .ga-panel-fs *::after { box-sizing: border-box !important; }
 .ga-mount.ga-left { right: auto !important; left: 24px !important; align-items: flex-start !important; }
 
 .ga-launcher { animation: ga-launcher-in 600ms cubic-bezier(.22,1,.36,1) both; animation-delay: .15s; }
