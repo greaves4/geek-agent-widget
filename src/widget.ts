@@ -185,12 +185,27 @@ export async function init(opts: InitOptions) {
       onClose: () => closePanel(true)
     });
     panelWrap.appendChild(panelHandle.root);
-    mount.insertBefore(panelWrap, launcher.root);
+
+    if (fullscreen) {
+      // En mobile, el panel va directo al body con position fixed.
+      // El launcher se oculta vía CSS (.ga-has-panel).
+      panelWrap.style.cssText =
+        "position:fixed;top:0;left:0;right:0;bottom:0;" +
+        "width:100vw;width:100dvw;height:100vh;height:100dvh;" +
+        "z-index:2147483647;animation:ga-panel-in 260ms cubic-bezier(.22,1,.36,1) both;";
+      document.body.appendChild(panelWrap);
+      mount.classList.add("ga-has-panel");
+      // Bloqueamos el scroll del body para que solo scroll dentro del panel
+      document.body.style.setProperty("overflow", "hidden", "important");
+    } else {
+      mount.insertBefore(panelWrap, launcher.root);
+    }
+
     panelHandle.setMessages(state.messages);
     setTimeout(() => panelHandle?.focusInput(), 100);
   }
 
-  function closePanel(reset: boolean) {
+  function closePanel(_reset: boolean) {
     if (panelWrap) {
       panelWrap.remove();
       panelWrap = null;
@@ -198,10 +213,8 @@ export async function init(opts: InitOptions) {
     }
     state.open = false;
     launcher.setOpen(false);
-    if (reset) {
-      // (×) cierra pero conserva la conversación (igual que el demo de referencia)
-      // Si quisiéramos limpiarla, sería aquí.
-    }
+    mount.classList.remove("ga-has-panel");
+    document.body.style.removeProperty("overflow");
     saveState(key, state);
   }
 

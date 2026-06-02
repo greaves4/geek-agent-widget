@@ -44,7 +44,18 @@ export function createPanel(opts: PanelOpts): PanelHandle {
   const root = el("div", {
     className: opts.fullscreen ? "ga-panel-fs" : "",
     attrs: { role: "dialog", "aria-label": opts.botName },
-    style: {
+    style: opts.fullscreen ? {
+      width: "100%",
+      height: "100%",
+      background: S.body,
+      display: "flex",
+      flexDirection: "column",
+      borderRadius: "0",
+      overflow: "hidden",
+      border: "none",
+      fontFamily: opts.fontFamily,
+      fontSize: `${opts.fontSize}px`
+    } : {
       width: `${opts.width}px`,
       height: `${opts.height}px`,
       background: S.body,
@@ -64,7 +75,9 @@ export function createPanel(opts: PanelOpts): PanelHandle {
     style: {
       background: opts.primary,
       color: fg,
-      padding: "14px 12px 14px 16px",
+      padding: opts.fullscreen
+        ? "calc(14px + env(safe-area-inset-top, 0px)) 12px 14px 16px"
+        : "14px 12px 14px 16px",
       display: "flex",
       alignItems: "center",
       gap: "12px",

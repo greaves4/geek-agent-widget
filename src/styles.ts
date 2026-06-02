@@ -2,6 +2,10 @@
  * CSS inyectado en el <head> del host site.
  * Solo selectores scoped a .ga-* para no contaminar el sitio.
  * Animaciones y pseudo-states (que no se pueden hacer inline).
+ *
+ * NOTE: usamos !important en posicionamiento porque algunos hosts (Lenis,
+ * Framer Motion, Tailwind reset) aplican transforms o resets en <body> /
+ * <html> que rompen position: fixed normal.
  */
 export const CSS = `
 @keyframes ga-launcher-in { from { opacity:0; transform: translateY(16px) } to { opacity:1; transform:none } }
@@ -11,11 +15,21 @@ export const CSS = `
 @keyframes ga-halo { 0%{box-shadow:0 0 0 0 rgba(74,244,143,.55)} 70%{box-shadow:0 0 0 7px rgba(74,244,143,0)} 100%{box-shadow:0 0 0 0 rgba(74,244,143,0)} }
 @keyframes ga-wink { 0%,100%{transform:scale(1);box-shadow:none} 50%{transform:scale(1.5);box-shadow:0 0 8px rgba(74,244,143,.65)} }
 
-.ga-mount { position: fixed; right: 24px; bottom: 24px; z-index: 99999;
-  display: flex; flex-direction: column; align-items: flex-end; gap: 14px;
+.ga-mount {
+  position: fixed !important;
+  right: 24px !important;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px)) !important;
+  z-index: 2147483647 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-end !important;
+  gap: 14px !important;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  isolation: isolate;
+  pointer-events: none;
 }
-.ga-mount.ga-left { right: auto; left: 24px; align-items: flex-start; }
+.ga-mount > * { pointer-events: auto; }
+.ga-mount.ga-left { right: auto !important; left: 24px !important; align-items: flex-start !important; }
 
 .ga-launcher { animation: ga-launcher-in 600ms cubic-bezier(.22,1,.36,1) both; animation-delay: .15s; }
 .ga-panel-wrap { animation: ga-panel-in 260ms cubic-bezier(.22,1,.36,1) both; transform-origin: bottom right; }
@@ -38,14 +52,35 @@ export const CSS = `
   .ga-launcher, .ga-panel-wrap, .ga-msg-in, .ga-dot, .ga-status-dot, .ga-dot-wink { animation: none !important; }
 }
 
+/* MOBILE: panel en fullscreen, launcher con offset menor */
 @media (max-width: 767px) {
-  .ga-mount { right: 16px; bottom: 16px; }
-  .ga-mount.ga-left { left: 16px; }
-  .ga-panel-fs {
-    position: fixed !important; inset: 0 !important;
-    width: 100vw !important; height: 100dvh !important;
-    border-radius: 0 !important; border: none !important;
+  .ga-mount {
+    right: 16px !important;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px)) !important;
   }
+  .ga-mount.ga-left { left: 16px !important; }
+
+  /* El launcher se queda chico para no tapar contenido */
+  .ga-launcher {
+    width: 56px !important;
+    height: 56px !important;
+  }
+
+  /* Panel en pantalla completa */
+  .ga-panel-fs {
+    position: fixed !important;
+    top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
+    width: 100vw !important;
+    width: 100dvw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    border-radius: 0 !important;
+    border: none !important;
+    max-width: none !important;
+    max-height: none !important;
+  }
+  /* Cuando el panel está abierto, ocultamos el launcher para que no se monte encima */
+  .ga-has-panel .ga-launcher { display: none !important; }
 }
 `;
 
