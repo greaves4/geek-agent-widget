@@ -240,6 +240,11 @@ export async function init(opts: InitOptions) {
   // ─── Polling de mensajes del asesor humano ─────────────────
   async function pollOnce() {
     if (!state.conversationId) return;
+    // Pausamos el polling mientras un POST /widget/chat está en vuelo.
+    // Si no lo hacemos, el polling puede traer el reply del bot ANTES de que
+    // handleSend lo registre en recentBotReplies → duplicado al renderear.
+    if (sending) return;
+
     const result = await pollMessages(apiBase, opts.apiKey, state.conversationId, lastPollSeen);
     if (!result) return;
 
@@ -264,19 +269,27 @@ export async function init(opts: InitOptions) {
 
     if (!result.messages || result.messages.length === 0) return;
 
-    // Mensajes nuevos del servidor. Dedup por id y por contenido reciente.
+    // Mensajes nuevos del servidor. Triple dedup: id, set "recent", y contenido en el state local.
     const knownIds = new Set(state.messages.map(m => String(m.id)));
+    // También miramos los últimos 5 mensajes del bot en state local — si uno comparte
+    // contenido con un mensaje que el server reporta como "nuevo", es la versión real
+    // de algo que ya renderizamos (race: poll volvió antes de rememberBotReply).
+    const recentLocalBotTexts = new Set(
+      state.messages.filter(m => m.from === "bot").slice(-5).map(m => m.text)
+    );
     let appended = 0;
     for (const m of result.messages) {
-      // Skip si ya tenemos este UUID
       if (knownIds.has(String(m.id))) {
         lastPollSeen = m.created_at;
         continue;
       }
-      // Skip si es la versión "oficial" de un reply del bot que ya renderizamos
-      // localmente desde POST /widget/chat (mismo contenido, distinto id).
       if (recentBotReplies.has(m.content)) {
         recentBotReplies.delete(m.content);
+        lastPollSeen = m.created_at;
+        continue;
+      }
+      if (recentLocalBotTexts.has(m.content)) {
+        // Ya tenemos esta respuesta localmente con un id sintético. La saltamos.
         lastPollSeen = m.created_at;
         continue;
       }
