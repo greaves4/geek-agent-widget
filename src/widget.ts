@@ -167,6 +167,15 @@ export async function init(opts: InitOptions) {
   let pollTimer: number | null = null;
   let handoffActive = false;
   let lastPollSeen: string | null = null; // ISO timestamp del último mensaje visto vía poll
+  // Set de respuestas del bot que ya renderizamos localmente desde POST /widget/chat.
+  // El polling de /widget/messages las traerá con su UUID real — si matchea contenido,
+  // la skipeamos para evitar la duplicación (id local b-xxx ≠ id real UUID).
+  const recentBotReplies = new Set<string>();
+  function rememberBotReply(text: string) {
+    recentBotReplies.add(text);
+    // Auto-limpieza tras 60s — más que suficiente para que llegue por polling.
+    window.setTimeout(() => recentBotReplies.delete(text), 60_000);
+  }
 
   function isMobile(): boolean {
     return window.matchMedia("(max-width: 767px)").matches;
@@ -255,11 +264,22 @@ export async function init(opts: InitOptions) {
 
     if (!result.messages || result.messages.length === 0) return;
 
-    // Mensajes nuevos del servidor. Dedup por id por si acaso.
+    // Mensajes nuevos del servidor. Dedup por id y por contenido reciente.
     const knownIds = new Set(state.messages.map(m => String(m.id)));
     let appended = 0;
     for (const m of result.messages) {
-      if (knownIds.has(String(m.id))) continue;
+      // Skip si ya tenemos este UUID
+      if (knownIds.has(String(m.id))) {
+        lastPollSeen = m.created_at;
+        continue;
+      }
+      // Skip si es la versión "oficial" de un reply del bot que ya renderizamos
+      // localmente desde POST /widget/chat (mismo contenido, distinto id).
+      if (recentBotReplies.has(m.content)) {
+        recentBotReplies.delete(m.content);
+        lastPollSeen = m.created_at;
+        continue;
+      }
       const newMsg: Message = {
         id: m.id,
         from: "bot",
@@ -310,6 +330,11 @@ export async function init(opts: InitOptions) {
     }
   }
 
+  // CRÍTICO: appendear el launcher al mount ANTES de openPanel(), porque
+  // openPanel() en desktop hace `mount.insertBefore(panelWrap, launcher.root)`,
+  // que falla si launcher.root no está dentro de mount.
+  mount.appendChild(launcher.root);
+
   // Si saved.open era true, abre al cargar
   if (state.open) {
     state.badge = 0;
@@ -330,7 +355,6 @@ export async function init(opts: InitOptions) {
     };
     state.messages.push(userMsg);
     panelHandle.appendMessage(userMsg);
-    typingActive = true;
     panelHandle.setTyping(true);
     saveState(key, state);
 
@@ -339,7 +363,6 @@ export async function init(opts: InitOptions) {
       conversationId: state.conversationId
     }, lang);
 
-    typingActive = false;
     panelHandle?.setTyping(false);
 
     // Debug temporal — para diagnosticar por qué no se renderiza la respuesta
@@ -371,6 +394,9 @@ export async function init(opts: InitOptions) {
           time: fmtTime(0)
         };
         state.messages.push(botMsg);
+        // Marcamos el contenido para que el polling no lo duplique
+        // cuando lo traiga con su UUID real de la DB.
+        rememberBotReply(botMsg.text);
         try {
           panelHandle?.appendMessage(botMsg);
           panelHandle?.pulseDot();
@@ -404,7 +430,7 @@ export async function init(opts: InitOptions) {
     sending = false;
   }
 
-  mount.appendChild(launcher.root);
+  // (launcher ya fue appendeado al mount más arriba — antes de openPanel)
 
   // Manejo de resize (mobile ↔ desktop)
   let lastFullscreen = isMobile();
