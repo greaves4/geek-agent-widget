@@ -187,6 +187,15 @@ export function createPanel(opts: PanelOpts): PanelHandle {
     }
   });
 
+  // Block wheel/touch from reaching JS smooth-scroll libs on the host page
+  // (Lenis, Locomotive, etc.). overscroll-behavior only stops the native
+  // browser chain — not window-level wheel listeners.
+  const stopChain = (e: Event) => e.stopPropagation();
+  scroller.addEventListener("wheel", stopChain, { passive: true });
+  scroller.addEventListener("touchmove", stopChain, { passive: true });
+  root.addEventListener("wheel", stopChain, { passive: true });
+  root.addEventListener("touchmove", stopChain, { passive: true });
+
   function renderMessage(m: Message, animate = true): HTMLElement {
     const isUser = m.from === "user";
     const userFg = readableOn(opts.primary);
