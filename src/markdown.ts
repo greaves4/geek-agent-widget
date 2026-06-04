@@ -52,11 +52,21 @@ export function renderMarkdown(input: string, linkColor: string): string {
     // `code`
     s = s.replace(/`([^`\n]+)`/g, "<code style=\"background:rgba(0,0,0,.08);padding:1px 5px;border-radius:3px;font-size:.92em;font-family:ui-monospace,monospace;\">$1</code>");
 
-    // Listas simples: "- " al inicio de línea
-    s = s.replace(/(^|\n)([-*])\s+(.+)/g, (_m, pre: string, _b: string, item: string) => `${pre}• ${item}`);
+    // Listas: agrupa líneas que empiezan con "- ", "* " o "• " en <ul>
+    // (corre antes del paso de saltos de línea para no romperlo con <br>)
+    s = s.replace(/((?:^|\n)(?:[-*•])\s+.+(?:\n(?:[-*•])\s+.+)*)/g, (block: string) => {
+      const items = block
+        .split(/\n/)
+        .filter((l) => /^[-*•]\s+/.test(l.trim()))
+        .map((l) => `<li>${l.replace(/^[-*•]\s+/, "")}</li>`)
+        .join("");
+      return `\n<ul style="margin:6px 0 6px 4px;padding-left:18px;display:flex;flex-direction:column;gap:6px;list-style:disc outside;">${items}</ul>\n`;
+    });
 
-    // Saltos de línea
+    // Saltos de línea (solo fuera de <ul>, marcamos con placeholder antes/después)
     s = s.replace(/\n/g, "<br>");
+    // Limpia <br> que quedaron justo antes/después del <ul>
+    s = s.replace(/<br>\s*<ul/g, "<ul").replace(/<\/ul>\s*<br>/g, "</ul>");
 
     return s;
   } catch (e) {

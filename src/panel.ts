@@ -59,6 +59,9 @@ export function createPanel(opts: PanelOpts): PanelHandle {
     } : {
       width: `${opts.width}px`,
       height: `${opts.height}px`,
+      // Cap to viewport when the configured height exceeds the available room.
+      // 96px ≈ launcher (64px) + margin top/bottom — keeps the header visible.
+      maxHeight: "calc(100vh - 96px)",
       background: S.body,
       display: "flex",
       flexDirection: "column",
@@ -176,9 +179,11 @@ export function createPanel(opts: PanelOpts): PanelHandle {
   // ─── MESSAGES ─────────────────────────────────────────────
   const scroller = el("div", {
     style: {
-      flex: "1", overflowY: "auto", padding: "18px 16px",
+      flex: "1", minHeight: "0", overflowY: "auto", padding: "18px 16px",
       display: "flex", flexDirection: "column", gap: "12px",
-      background: S.body
+      background: S.body,
+      // Prevent scroll chaining into the host page when reaching top/bottom
+      overscrollBehavior: "contain"
     }
   });
 
