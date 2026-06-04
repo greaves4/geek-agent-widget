@@ -33,9 +33,16 @@ export function renderMarkdown(input: string, linkColor: string): string {
   try {
     let s = escapeHtml(input);
 
-    // [text](url) — antes que autolink para no doblar
+    // [text](url) — formato Markdown estándar. Va antes del autolink para no doblar.
     s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, text: string, url: string) =>
       `<a href="${safeUrl(url)}" target="_blank" rel="noopener" style="color:${linkColor};text-decoration:underline;">${text}</a>`
+    );
+
+    // Fallback: [https://...] (URL sola entre corchetes, sin paréntesis) —
+    // algunos LLMs lo emiten así. Lo convertimos en link clickeable con
+    // la URL como texto descriptivo.
+    s = s.replace(/\[(https?:\/\/[^\s\]]+)\]/g, (_m, url: string) =>
+      `<a href="${safeUrl(url)}" target="_blank" rel="noopener" style="color:${linkColor};text-decoration:underline;">${url}</a>`
     );
 
     // Autolink URLs sueltas (que no estén ya dentro de un href)
@@ -52,8 +59,29 @@ export function renderMarkdown(input: string, linkColor: string): string {
     // `code`
     s = s.replace(/`([^`\n]+)`/g, "<code style=\"background:rgba(0,0,0,.08);padding:1px 5px;border-radius:3px;font-size:.92em;font-family:ui-monospace,monospace;\">$1</code>");
 
-    // Listas: agrupa líneas que empiezan con "- ", "* " o "• " en <ul>
-    // (corre antes del paso de saltos de línea para no romperlo con <br>)
+    // Pseudo-listas estilo "[1] item / [2] item / [3] item" — algunos LLMs
+    // las emiten como citas académicas. Las convertimos en lista numerada
+    // ANTES de procesar las listas standard, para que se vean bien.
+    s = s.replace(/((?:^|\n)\[\d+\]\s+[^\n]+(?:\n\[\d+\]\s+[^\n]+)+)/g, (block: string) => {
+      const items = block
+        .split(/\n/)
+        .filter((l) => /^\[\d+\]\s+/.test(l.trim()))
+        .map((l) => `<li>${l.replace(/^\[\d+\]\s+/, "")}</li>`)
+        .join("");
+      return `\n<ol style="margin:6px 0 6px 4px;padding-left:22px;display:flex;flex-direction:column;gap:8px;list-style:decimal outside;">${items}</ol>\n`;
+    });
+
+    // Listas numeradas estándar Markdown: "1. item / 2. item / 3. item"
+    s = s.replace(/((?:^|\n)\d+\.\s+[^\n]+(?:\n\d+\.\s+[^\n]+)+)/g, (block: string) => {
+      const items = block
+        .split(/\n/)
+        .filter((l) => /^\d+\.\s+/.test(l.trim()))
+        .map((l) => `<li>${l.replace(/^\d+\.\s+/, "")}</li>`)
+        .join("");
+      return `\n<ol style="margin:6px 0 6px 4px;padding-left:22px;display:flex;flex-direction:column;gap:6px;list-style:decimal outside;">${items}</ol>\n`;
+    });
+
+    // Listas con viñetas: agrupa líneas que empiezan con "- ", "* " o "• " en <ul>
     s = s.replace(/((?:^|\n)(?:[-*•])\s+.+(?:\n(?:[-*•])\s+.+)*)/g, (block: string) => {
       const items = block
         .split(/\n/)
@@ -63,10 +91,12 @@ export function renderMarkdown(input: string, linkColor: string): string {
       return `\n<ul style="margin:6px 0 6px 4px;padding-left:18px;display:flex;flex-direction:column;gap:6px;list-style:disc outside;">${items}</ul>\n`;
     });
 
-    // Saltos de línea (solo fuera de <ul>, marcamos con placeholder antes/después)
+    // Saltos de línea (solo fuera de listas, marcamos con placeholder antes/después)
     s = s.replace(/\n/g, "<br>");
-    // Limpia <br> que quedaron justo antes/después del <ul>
-    s = s.replace(/<br>\s*<ul/g, "<ul").replace(/<\/ul>\s*<br>/g, "</ul>");
+    // Limpia <br> que quedaron justo antes/después de <ul> y <ol>
+    s = s
+      .replace(/<br>\s*<ul/g, "<ul").replace(/<\/ul>\s*<br>/g, "</ul>")
+      .replace(/<br>\s*<ol/g, "<ol").replace(/<\/ol>\s*<br>/g, "</ol>");
 
     return s;
   } catch (e) {
