@@ -71,6 +71,20 @@ export function renderMarkdown(input: string, linkColor: string): string {
       return `\n<ol style="margin:6px 0 6px 4px;padding-left:22px;display:flex;flex-direction:column;gap:8px;list-style:decimal outside;">${items}</ol>\n`;
     });
 
+    // Pseudo-headers estilo "[Título]: descripción" o "[Título] descripción"
+    // (sin paréntesis, no es un link de Markdown). Lo convertimos a
+    // "<strong>Título</strong>: descripción" / "<strong>Título</strong> descripción".
+    // Regex: corchetes en inicio de línea, contenido sin corchetes y sin URLs,
+    // seguido OPCIONALMENTE de ":" y luego espacio + texto.
+    s = s.replace(
+      /(^|\n)\[([^\]\n]+?)\](:?)\s+([^\n]+)/g,
+      (_m, pre: string, label: string, colon: string, rest: string) => {
+        // Si el "label" parece ser un link de Markdown malformado (empieza con http), no toques.
+        if (/^https?:/i.test(label.trim())) return _m;
+        return `${pre}<strong>${label}</strong>${colon} ${rest}`;
+      }
+    );
+
     // Listas numeradas estándar Markdown: "1. item / 2. item / 3. item"
     s = s.replace(/((?:^|\n)\d+\.\s+[^\n]+(?:\n\d+\.\s+[^\n]+)+)/g, (block: string) => {
       const items = block
